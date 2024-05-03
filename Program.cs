@@ -1,5 +1,4 @@
 ﻿using HtmlAgilityPack;
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace BookWebPageTraverser
@@ -12,6 +11,7 @@ namespace BookWebPageTraverser
         private const string AnchorNodeName = "a";
         private const string HrefAttributeName = "href";
         private const string SrcAttributeName = "src";
+        private static readonly SemaphoreSlim semaphoreSlim = new SemaphoreSlim(4);
 
         static async Task Main(string[] args)
         {
@@ -20,7 +20,7 @@ namespace BookWebPageTraverser
             const string booksFolderName = "Books";
             var urlToLocalPathMap = new Dictionary<string, string>();
 
-            var stopwatch = new Stopwatch();
+            var stopwatch = new System.Diagnostics.Stopwatch();
             stopwatch.Start();
 
             try
@@ -28,7 +28,6 @@ namespace BookWebPageTraverser
                 string booksFolder = Path.Combine(outputPath, booksFolderName);
                 CreateDirectory(outputPath);
 
-                // Download and save the main page
                 var mainHtmlDocument = await FetchHtmlDocument(baseUrl + IndexFileName);
                 SaveHtmlPage(mainHtmlDocument.DocumentNode.OuterHtml, outputPath, IndexFileName);
 
@@ -58,18 +57,14 @@ namespace BookWebPageTraverser
 
                         if (bookLinks != null)
                         {
+                            var tasks = new List<Task>();
                             foreach (var bookLink in bookLinks)
                             {
                                 string bookUrl = GetBookUrl(baseUrl, bookLink.Attributes[HrefAttributeName].Value);
-                                var bookHtmlDocument = await FetchHtmlDocument(bookUrl);
-                                string bookTitle = GetValidFileName(bookHtmlDocument.DocumentNode.SelectSingleNode("//h1").InnerText.Trim());
-                                string bookFolder = Path.Combine(booksFolder, bookCategoryPage.InnerText.Trim(), bookTitle);
-                                CreateDirectory(bookFolder);
-
-                                SaveHtmlPage(bookHtmlDocument.DocumentNode.OuterHtml, bookFolder, IndexFileName);
-
-                                ExtractAndDownloadResources(bookHtmlDocument, bookUrl, bookFolder, urlToLocalPathMap);
+                                var task = ProcessBook(bookUrl, booksFolder, bookCategoryPage.InnerText.Trim(), urlToLocalPathMap);
+                                tasks.Add(task);
                             }
+                            await Task.WhenAll(tasks);
                         }
                     }
                 }
@@ -97,7 +92,7 @@ namespace BookWebPageTraverser
 
         private static async Task<HtmlDocument> FetchHtmlDocument(string url)
         {
-            var httpClient = new HttpClient();
+            using var httpClient = new HttpClient();
             var html = await httpClient.GetStringAsync(url);
             var htmlDocument = new HtmlDocument();
             htmlDocument.LoadHtml(html);
@@ -119,6 +114,26 @@ namespace BookWebPageTraverser
             string invalidChars = new string(Path.GetInvalidFileNameChars());
             string invalidReStr = Regex.Escape(invalidChars);
             return Regex.Replace(fileName, "[" + invalidReStr + "]", "_");
+        }
+
+        private static async Task ProcessBook(string bookUrl, string booksFolder, string category, Dictionary<string, string> urlToLocalPathMap)
+        {
+            await semaphoreSlim.WaitAsync();
+            try
+            {
+                var bookHtmlDocument = await FetchHtmlDocument(bookUrl);
+                string bookTitle = GetValidFileName(bookHtmlDocument.DocumentNode.SelectSingleNode("//h1").InnerText.Trim());
+                string bookFolder = Path.Combine(booksFolder, category, bookTitle);
+                CreateDirectory(bookFolder);
+
+                SaveHtmlPage(bookHtmlDocument.DocumentNode.OuterHtml, bookFolder, IndexFileName);
+
+                ExtractAndDownloadResources(bookHtmlDocument, bookUrl, bookFolder, urlToLocalPathMap);
+            }
+            finally
+            {
+                semaphoreSlim.Release();
+            }
         }
 
         private static void ExtractAndDownloadResources(HtmlDocument htmlDocument, string baseUrl, string bookFolder, Dictionary<string, string> urlToLocalPathMap)
@@ -150,12 +165,14 @@ namespace BookWebPageTraverser
 
                         DownloadFile(uri, fileName).Wait();
 
-                        urlToLocalPathMap.Add(src, fileName);
+                        if (!urlToLocalPathMap.ContainsKey(src))
+                        {
+                            urlToLocalPathMap.Add(src, fileName);
+                        }
                     }
                 }
             }
         }
-
 
         private static async Task DownloadFile(Uri uri, string outputPath)
         {
