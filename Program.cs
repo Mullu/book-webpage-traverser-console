@@ -26,7 +26,14 @@ namespace BookWebPageTraverser
             try
             {
                 string booksFolder = Path.Combine(outputPath, booksFolderName);
+                CreateDirectory(outputPath);
+
+                // Download and save the main page
+                var mainHtmlDocument = await FetchHtmlDocument(baseUrl + IndexFileName);
+                SaveHtmlPage(mainHtmlDocument.DocumentNode.OuterHtml, outputPath, IndexFileName);
+
                 CreateDirectory(booksFolder);
+                SaveHtmlPage(mainHtmlDocument.DocumentNode.OuterHtml, outputPath, IndexFileName);
 
                 var htmlDocument = await FetchHtmlDocument(baseUrl);
 
