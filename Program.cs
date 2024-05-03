@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace BookWebPageTraverser
@@ -18,6 +19,9 @@ namespace BookWebPageTraverser
             const string outputPath = "downloaded_books_files";
             const string booksFolderName = "Books";
             var urlToLocalPathMap = new Dictionary<string, string>();
+
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
 
             try
             {
@@ -71,6 +75,11 @@ namespace BookWebPageTraverser
             catch (Exception ex)
             {
                 Console.WriteLine($"An error occurred: {ex.Message}");
+            }
+            finally
+            {
+                stopwatch.Stop();
+                Console.WriteLine($"Total execution time: {stopwatch.Elapsed}");
             }
         }
 
