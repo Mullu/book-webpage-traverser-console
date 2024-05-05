@@ -10,7 +10,7 @@ This is a console program developed in C# to traverse and download all pages and
 
 ## Architecture
 
-The Book Webpage Traverser Console application follows a modular architecture, utilizing the following components:
+The Book Webpage Scraper Console application follows a modular architecture, utilizing the following components:
 
 - **Scraper Handler Service**: Responsible for handling the scraping process, including fetching HTML documents, saving pages to disk, and downloading resources.
 - **Scraper Runner**: Orchestrates the scraping process, initiating the traversal and download tasks.
@@ -23,8 +23,7 @@ The application includes the following main methods:
 - **ScrapeBookPages(string baseUrl, string outputPath)**: Initiates the scraping process by asynchronously traversing the website and downloading pages and resources.
 - **FetchHtmlDocument(string url)**: Fetches an HTML document from the specified URL using HttpClient asynchronously.
 - **SaveHtmlPage(string htmlContent, string folderPath, string fileName)**: Saves an HTML page to the specified folder path.
-- **ScrapeBookCategoryPage(string baseUrl, HtmlNode bookCategoryPage, string booksFolder, ConcurrentDictionary<string, string> urlToLocalPathMap)**: Handles the scraping process for a specific category page.
-- **ScrapeBookPageWithSemaphore(string baseUrl, HtmlNode bookLink, string booksFolder, ConcurrentDictionary<string, string> urlToLocalPathMap)**: Controls the scraping process for individual book pages using semaphores to limit concurrency.
+- **ScrapeBookPage(string baseUrl, string booksFolder, ConcurrentDictionary<string, string> urlToLocalPathMap)**: Handles the scraping process for book pages.
 - **ExtractAndDownloadImages(HtmlDocument htmlDocument, string baseUrl, string bookFolder, ConcurrentDictionary<string, string> urlToLocalPathMap)**: Extracts and downloads images from the HTML document asynchronously.
 - **ExtractAndDownloadPages(HtmlDocument htmlDocument, string baseUrl, string bookFolder, ConcurrentDictionary<string, string> urlToLocalPathMap)**: Extracts and downloads linked pages from the HTML document asynchronously.
 
@@ -37,15 +36,15 @@ The application includes the following main methods:
 
 The downloaded book files (images, pages, etc.) will be available at `/path/to/repo/bin/Debug/net7.0/downloaded_books_files`.
 
-Here is sample output from my window local machine
+Here is sample output from my local machine:
 
 ![alt text](downloadedBookFiles.png)
 
 Here is the index page contents and Books folder content:
+
 ![alt text](index.png)
 
 ![alt text](booksImageAndPages.png)
-
 
 ## Configuration
 
@@ -59,9 +58,13 @@ The application relies on the following external libraries:
 
 ## Asynchronicity, Parallelism, and Threading
 
-The Book Webpage Traverser Console makes extensive use of asynchronous programming, parallelism, and threading to optimize performance and resource utilization. It utilizes asynchronous methods for fetching HTML documents and downloading resources, allowing multiple tasks to run concurrently without blocking the main thread. Parallelism is employed to speed up the process of downloading images and linked pages by processing them simultaneously. Threading, specifically using SemaphoreSlim, is utilized to control the level of concurrency and prevent resource contention, ensuring efficient resource management and preventing overload.
+The Book Webpage Scraper Console makes extensive use of asynchronous programming, parallelism, and threading to optimize performance and resource utilization. It utilizes asynchronous methods for fetching HTML documents and downloading resources, allowing multiple tasks to run concurrently without blocking the main thread. Parallelism is employed to speed up the process of downloading images and linked pages by processing them simultaneously. Threading, specifically using SemaphoreSlim, is utilized to control the level of concurrency and prevent resource contention, ensuring efficient resource management and preventing overload.
 
 For further insights into implementing concurrency control using SemaphoreSlim and exploring alternative approaches, feel free to consult the article ["C# Elegant Way Traverse Many URLs"](https://learn.microsoft.com/en-us/answers/questions/1055027/c-elegant-way-traverse-many-urls.html).
+
+## Testing
+
+Unit tests have been implemented to ensure the functionality of the application. You can find the tests in the `ScraperRunnerTests.cs` file under the `BookWebPageScraper.Tests` namespace.
 
 ## License
 
