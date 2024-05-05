@@ -35,7 +35,6 @@ namespace BookWebPageScraper
             try
             {
                 await _scraperHandlerService.ScrapeBookPages(baseUrl, outputPath);
-                Console.WriteLine("Scraping completed successfully.");
             }
             catch (Exception ex)
             {
