@@ -60,7 +60,7 @@ The application relies on the following external libraries:
 
 The Book Webpage Scraper Console makes extensive use of asynchronous programming, parallelism, and threading to optimize performance and resource utilization. It utilizes asynchronous methods for fetching HTML documents and downloading resources, allowing multiple tasks to run concurrently without blocking the main thread. Parallelism is employed to speed up the process of downloading images and linked pages by processing them simultaneously. Threading, specifically using SemaphoreSlim, is utilized to control the level of concurrency and prevent resource contention, ensuring efficient resource management and preventing overload.
 
-For further insights into implementing concurrency control using SemaphoreSlim and exploring alternative approaches, feel free to consult the article ["C# Elegant Way Traverse Many URLs"](https://learn.microsoft.com/en-us/answers/questions/1055027/c-elegant-way-traverse-many-urls.html).
+For further insights into implementing concurrency control using SemaphoreSlim and exploring alternative approaches, you can refer more this article ["C# Elegant Way Traverse Many URLs"](https://learn.microsoft.com/en-us/answers/questions/1055027/c-elegant-way-traverse-many-urls.html).
 
 ## Testing
 
