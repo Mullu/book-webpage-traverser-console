@@ -35,7 +35,7 @@ namespace BookWebPageScraper
                     Console.WriteLine($"Processed page: {currentPagetUrl} : started");
                     htmlDocument = await FetchHtmlDocument(currentPagetUrl);
                     await ScrapeBookPage(currentPagetUrl, pageNumber, catalogueFolder, urlToLocalPathMap);
-                    UpdateHtmlLinks(urlToLocalPathMap, catalogueFolder);
+
                     Console.WriteLine($"Processed page: {currentPagetUrl} : finished");
 
                     currentPagetUrl = GetNextPageUrl(htmlDocument, currentPagetUrl);
@@ -325,20 +325,6 @@ namespace BookWebPageScraper
         private Uri GetAbsoluteUri(string baseUrl, string relativeUrl)
         {
             return new Uri(new Uri(baseUrl), relativeUrl);
-        }
-
-        private void UpdateHtmlLinks(ConcurrentDictionary<string, string> urlToLocalPathMap, string outputPath)
-        {
-            string[] htmlFiles = Directory.GetFiles(outputPath, "*.html", SearchOption.AllDirectories);
-            foreach (var file in htmlFiles)
-            {
-                string content = File.ReadAllText(file);
-                foreach (var keyValuePair in urlToLocalPathMap)
-                {
-                    content = content.Replace(keyValuePair.Key, keyValuePair.Value.Replace('\\', '/'));
-                }
-                File.WriteAllText(file, content);
-            }
         }
 
         private async Task AcquireSemaphore()
