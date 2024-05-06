@@ -23,24 +23,25 @@ namespace BookWebPageScraper
             {
                 CreateDirectory(outputPath);
 
+                var htmlDocument = await FetchHtmlDocument(baseUrl);
+                SaveHtmlPage(currentPagetUrl, htmlDocument.DocumentNode.OuterHtml, outputPath, IndexFileName);  //Home page
+
+                string catalogueFolder = Path.Combine(outputPath, "catalogue");
+                CreateDirectory(catalogueFolder);
+
                 int totalPages = 50;
                 foreach (int pageNumber in Enumerable.Range(1, totalPages))
                 {
                     Console.WriteLine($"Processed page: {currentPagetUrl} : started");
-                    var htmlDocument = await FetchHtmlDocument(currentPagetUrl);
-
-                    string catalogueFolder = pageNumber == 1 ? outputPath : Path.Combine(outputPath, "catalogue");
-                    CreateDirectory(catalogueFolder);
-
-                    SaveHtmlPage(htmlDocument.DocumentNode.OuterHtml, catalogueFolder, pageNumber);
-
-                    await ScrapeBookPage(currentPagetUrl, catalogueFolder, urlToLocalPathMap);
-
+                    htmlDocument = await FetchHtmlDocument(currentPagetUrl);
+                    await ScrapeBookPage(currentPagetUrl, pageNumber, catalogueFolder, urlToLocalPathMap);
                     UpdateHtmlLinks(urlToLocalPathMap, catalogueFolder);
                     Console.WriteLine($"Processed page: {currentPagetUrl} : finished");
 
                     currentPagetUrl = GetNextPageUrl(htmlDocument, currentPagetUrl);
                 }
+
+                await ExtractAndDownloadBookCategoryPages(await FetchHtmlDocument(baseUrl), baseUrl);
 
                 Console.WriteLine("Scraping completed successfully.");
             }
@@ -65,51 +66,51 @@ namespace BookWebPageScraper
             return htmlDocument;
         }
 
-        private void SaveHtmlPage(string htmlContent, string folderPath, int pageNumber)
+        private void SaveHtmlPage(string pageUrl, string htmlContent, string folderPath, int pageNumber)
         {
             string pageFileName;
-            if (pageNumber == 1)
-            {
-                pageFileName = $"index.html";
-            }
-            else
-            {
-                pageFileName = $"page-{pageNumber}.html";
-            }
+            pageFileName = $"page-{pageNumber}.html";
 
             lock (locker)
             {
                 File.WriteAllText(Path.Combine(folderPath, pageFileName), htmlContent);
             }
+
+            Console.WriteLine($"Successfully downloaded and saved {pageUrl}");
         }
 
-        private void SaveHtmlPage(string htmlContent, string folderPath, string pageFileName)
+        private void SaveHtmlPage(string pageUrl, string htmlContent, string folderPath, string pageFileName)
         {
             lock (locker)
             {
                 File.WriteAllText(Path.Combine(folderPath, pageFileName), htmlContent);
             }
+
+            Console.WriteLine($"Successfully downloaded and saved {pageUrl}");
         }
 
         private async Task ScrapeBookPage(
-            string baseUrl,
-            string booksFolder,
+            string pageUrl,
+            int pageNumber,
+            string catalogueFolder,
             ConcurrentDictionary<string, string> urlToLocalPathMap)
         {
-            var htmlDocument = await FetchHtmlDocument(baseUrl);
+            var htmlDocument = await FetchHtmlDocument(pageUrl);
 
             string bookLinksXPath = "//h3/a";
             var bookLinks = htmlDocument.DocumentNode.SelectNodes(bookLinksXPath);
 
+            SaveHtmlPage(pageUrl, htmlDocument.DocumentNode.OuterHtml, catalogueFolder, pageNumber);
+
             if (bookLinks != null)
             {
                 await Task.WhenAll(bookLinks.Select(bookLink =>
-                    ScrapeBooPageFiles(baseUrl, bookLink, booksFolder, urlToLocalPathMap)));
+                    ScrapeBookPageImageFiles(pageUrl, bookLink, catalogueFolder, urlToLocalPathMap)));
             }
         }
 
-        private async Task ScrapeBooPageFiles(
-            string baseUrl,
+        private async Task ScrapeBookPageImageFiles(
+            string pageUrl,
             HtmlNode bookLink,
             string booksFolder,
             ConcurrentDictionary<string, string> urlToLocalPathMap)
@@ -118,7 +119,7 @@ namespace BookWebPageScraper
 
             try
             {
-                string bookUrl = GetBookUrl(baseUrl, bookLink.Attributes[HrefAttributeName].Value);
+                string bookUrl = GetBookUrl(pageUrl, bookLink.Attributes[HrefAttributeName].Value);
                 var bookHtmlDocument = await FetchHtmlDocument(bookUrl);
                 string bookTitle = GetValidFileName(bookHtmlDocument.DocumentNode.SelectSingleNode("//h1").InnerText.Trim());
                 int indexHtmlIndex = bookLink.Attributes[HrefAttributeName].Value.IndexOf("index.html");
@@ -132,12 +133,61 @@ namespace BookWebPageScraper
 
                 CreateDirectory(bookFolder);
 
-                lock (locker)
+                var imageNodes = GetImageNodes(bookHtmlDocument);
+                if (imageNodes != null)
                 {
-                    SaveHtmlPage(bookHtmlDocument.DocumentNode.OuterHtml, bookFolder, IndexFileName);
-                }
+                    foreach (var node in imageNodes)
+                    {
+                        string src = node.Attributes[SrcAttributeName]?.Value;
+                        if (src != null && !urlToLocalPathMap.ContainsKey(src))
+                        {
+                            Uri uri = GetAbsoluteUri(bookUrl, src);
+                            string fileName = GetLocalFilePath(bookFolder, uri.LocalPath);
 
-                await ExtractAndDownloadContent(bookHtmlDocument, bookUrl, bookFolder, urlToLocalPathMap);
+                            await DownloadAndSaveFile(uri, fileName);
+
+                            urlToLocalPathMap.TryAdd(src, fileName);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                ReleaseSemaphore();
+            }
+
+        }
+
+        private async Task ExtractAndDownloadBookCategoryPages(HtmlDocument htmlDocument, string baseUrl)
+        {
+            await AcquireSemaphore();
+
+            try
+            {
+                var pageLinks = htmlDocument.DocumentNode.SelectNodes("//a[contains(@href,'index.html')]");
+                if (pageLinks != null)
+                {
+                    var books1PageLink = pageLinks.FirstOrDefault(pageLink =>
+                        GetBookUrl(baseUrl, pageLink.Attributes["href"].Value)
+                            .StartsWith("http://books.toscrape.com/catalogue/category/books_1"));
+
+                    foreach (var pageLink in pageLinks)
+                    {
+                        string pageUrl = GetBookUrl(baseUrl, pageLink.Attributes["href"].Value);
+
+                        if (pageUrl.StartsWith("http://books.toscrape.com/catalogue/category"))
+                        {
+                            if (books1PageLink != null && pageLink == books1PageLink)
+                            {
+                                await ProcessBooks1Page(pageUrl);
+                            }
+                            else
+                            {
+                                await ProcessBookCategoryPage(pageUrl);
+                            }
+                        }
+                    }
+                }
             }
             finally
             {
@@ -145,90 +195,59 @@ namespace BookWebPageScraper
             }
         }
 
-        private async Task ExtractAndDownloadContent(
-            HtmlDocument htmlDocument,
-            string baseUrl,
-            string bookFolder,
-            ConcurrentDictionary<string, string> urlToLocalPathMap)
+        private async Task ProcessBooks1Page(string pageUrl)
         {
-            await ExtractAndDownloadImages(htmlDocument, baseUrl, bookFolder, urlToLocalPathMap);
-            await ExtractAndDownloadPages(htmlDocument, baseUrl, bookFolder, urlToLocalPathMap);
+            var pageHtmlDocument = await FetchHtmlDocument(pageUrl);
+
+            string pageFileName = GetPageFileName(pageUrl);
+
+            string contentPath = Path.Combine("downloaded_books_files", "catalogue", "category", "books_1");
+            Directory.CreateDirectory(contentPath);
+            contentPath += "\\";
+
+            lock (locker)
+            {
+                SaveHtmlPage(pageUrl, pageHtmlDocument.DocumentNode.OuterHtml, contentPath, pageFileName);
+            }
         }
 
-        private async Task ExtractAndDownloadPages(
-            HtmlDocument htmlDocument,
-            string baseUrl,
-            string catalogueFolder,
-            ConcurrentDictionary<string, string> urlToLocalPathMap)
+        private async Task ProcessBookCategoryPage(string pageUrl)
         {
-            var pageLinks = htmlDocument.DocumentNode.SelectNodes("//a[contains(@href,'index.html')]");
-            if (pageLinks != null)
+            string currentUrl = pageUrl;
+
+            while (!string.IsNullOrEmpty(currentUrl))
             {
-                foreach (var pageLink in pageLinks)
-                {
-                    string pageUrl = GetBookUrl(baseUrl, pageLink.Attributes["href"].Value);
-                    {
-                        if (pageUrl.StartsWith("http://books.toscrape.com/catalogue/category/"))
-                        {
-                            var pageHtmlDocument = await FetchHtmlDocument(pageUrl);
+                var pageHtmlDocument = await FetchHtmlDocument(currentUrl);
 
-                            string pageFileName = GetPageFileName(pageLink.Attributes["href"].Value);
+                string pageFileName = GetPageFileName(currentUrl);
 
-                            string[] parts = pageUrl.Split('/');
-                            string middlePart = parts[parts.Length - 2];
+                string[] parts = currentUrl.Split('/');
+                string middlePart = parts[parts.Length - 2];
 
-                            string contentPath;
-                            if (middlePart == "books.toscrape.com")
-                            {
-                                contentPath = Path.Combine("downloaded_books_files", "catalogue", "category", "books_1");
-                            }
-                            else
-                            {
-                                contentPath = Path.Combine("downloaded_books_files", "catalogue", "category", "books", middlePart);
-                            }
+                string contentPath = Path.Combine("downloaded_books_files", "catalogue", "category", "books", middlePart);
+                Directory.CreateDirectory(contentPath);
+                contentPath += "\\";
 
-                            Directory.CreateDirectory(contentPath);
-                            contentPath += "\\";
+                await SaveHtmlBookCategoryPage(currentUrl, pageHtmlDocument.DocumentNode.OuterHtml, contentPath, pageFileName);
 
-                            lock (locker)
-                            {
-                                SaveHtmlPage(pageHtmlDocument.DocumentNode.OuterHtml, contentPath, pageFileName);
-                            }
-                        }
-                    }
-                }
+                currentUrl = GetNextPageUrl(pageHtmlDocument, currentUrl);
             }
+        }
+
+        private async Task SaveHtmlBookCategoryPage(string pageUrl, string htmlContent, string folderPath, string pageFileName)
+        {
+            lock (locker)
+            {
+                File.WriteAllText(Path.Combine(folderPath, pageFileName), htmlContent);
+            }
+
+            Console.WriteLine($"Successfully downloaded and saved from SaveHtmlPage2 {pageUrl}");
         }
 
         private string GetPageFileName(string url)
         {
             string[] parts = url.Split('/');
             return parts[parts.Length - 1];
-        }
-
-        private async Task ExtractAndDownloadImages(
-            HtmlDocument htmlDocument,
-            string baseUrl,
-            string bookFolder,
-            ConcurrentDictionary<string, string> urlToLocalPathMap)
-        {
-            var imageNodes = GetImageNodes(htmlDocument);
-            if (imageNodes != null)
-            {
-                foreach (var node in imageNodes)
-                {
-                    string src = node.Attributes[SrcAttributeName]?.Value;
-                    if (src != null && !urlToLocalPathMap.ContainsKey(src))
-                    {
-                        Uri uri = GetAbsoluteUri(baseUrl, src);
-                        string fileName = GetLocalFilePath(bookFolder, uri.LocalPath);
-
-                        await DownloadAndSaveFile(uri, fileName);
-
-                        urlToLocalPathMap.TryAdd(src, fileName);
-                    }
-                }
-            }
         }
 
         private HtmlNodeCollection GetImageNodes(HtmlDocument htmlDocument)
@@ -247,7 +266,7 @@ namespace BookWebPageScraper
                         using (var fileStream = new FileStream(outputPath, FileMode.Create))
                         {
                             await response.Content.CopyToAsync(fileStream);
-                            Console.WriteLine($"Successfully downloaded and saved {uri}. Status code: {response.StatusCode}");
+                            Console.WriteLine($"Successfully downloaded and saved from DownloadAndSaveFile {uri}");
                         }
                     }
                     else
