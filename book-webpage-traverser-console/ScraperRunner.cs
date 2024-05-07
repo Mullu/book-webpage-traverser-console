@@ -29,12 +29,11 @@ namespace BookWebPageScraper
 
         public async Task Run()
         {
-            const string baseUrl = "http://books.toscrape.com/";
             const string outputPath = "downloaded_books_files";
 
             try
             {
-                await _scraperHandlerService.ScrapeBookPages(baseUrl, outputPath);
+                await _scraperHandlerService.ScrapeBookPages(outputPath);
             }
             catch (Exception ex)
             {

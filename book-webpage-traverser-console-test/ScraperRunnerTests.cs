@@ -11,7 +11,7 @@ namespace BookWebPageScraper.Tests
         {
             // Arrange
             var mockScraperHandler = new Mock<IScraperHandlerService>();
-            mockScraperHandler.Setup(x => x.ScrapeBookPages(It.IsAny<string>(), It.IsAny<string>()))
+            mockScraperHandler.Setup(x => x.ScrapeBookPages(It.IsAny<string>()))
                 .Returns(Task.CompletedTask);
 
             var serviceProvider = new ServiceCollection()
@@ -25,7 +25,7 @@ namespace BookWebPageScraper.Tests
 
             // Assert
             Assert.DoesNotContain("Test exception", FakeConsole.Output);
-            mockScraperHandler.Verify(x => x.ScrapeBookPages(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+            mockScraperHandler.Verify(x => x.ScrapeBookPages(It.IsAny<string>()), Times.Once);
         }
 
 
@@ -36,7 +36,7 @@ namespace BookWebPageScraper.Tests
             FakeConsole.StartCapture();
             var exceptionMessage = "Test exception";
             var scraperHandlerMock = new Mock<IScraperHandlerService>();
-            scraperHandlerMock.Setup(x => x.ScrapeBookPages(It.IsAny<string>(), It.IsAny<string>()))
+            scraperHandlerMock.Setup(x => x.ScrapeBookPages(It.IsAny<string>()))
                               .Throws(new Exception(exceptionMessage));
 
             var scraperRunner = new ScraperRunner(scraperHandlerMock.Object);

@@ -2,6 +2,6 @@
 {
     public interface IScraperHandlerService
     {
-        Task ScrapeBookPages(string baseUrl, string outputPath);
+        Task ScrapeBookPages(string outputPath);
     }
 }
