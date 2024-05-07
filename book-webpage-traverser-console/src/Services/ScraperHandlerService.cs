@@ -101,10 +101,10 @@ namespace BookWebPageScraper
         }
 
         private async Task ScrapeBookPageImageFiles(
-    string pageUrl,
-    HtmlNode bookLink,
-    string booksFolder,
-    ConcurrentDictionary<string, string> urlToLocalPathMap)
+            string pageUrl,
+            HtmlNode bookLink,
+            string booksFolder,
+            ConcurrentDictionary<string, string> urlToLocalPathMap)
         {
             string bookUrl = GetBookUrl(pageUrl, bookLink.Attributes[HrefAttributeName].Value);
             var bookHtml = await GetStringAsync(bookUrl, default);
@@ -187,7 +187,6 @@ namespace BookWebPageScraper
             Directory.CreateDirectory(contentPath);
             SaveHtmlPage(pageUrl, pageHtmlDocument.DocumentNode.OuterHtml, contentPath, pageFileName);
         }
-
 
         private async Task ProcessBookCategoryPage(string pageUrl)
         {
